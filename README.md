@@ -96,8 +96,8 @@ MQTT_TOPIC=ece140a/ta7/autograder
 
 ## What Is Graded Automatically (70 points)
 
-- Items #1-4 (Frontend, 30 pts) are graded manually via video.
-- Items #5-9 (Webserver + Database, 70 pts) are graded by autograder tests below.
+- ESP 32, 30 pts is graded manually via video and code submission.
+- Webserver + Database, 70 pts are graded by autograder tests below.
 
 ### Rubric #5 - Serves frontend (20 pts)
 
