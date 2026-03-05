@@ -63,12 +63,23 @@ void ECE140_MQTT::setCallback(void (*callback)(char*, uint8_t*, unsigned int)) {
 }
 
 void ECE140_MQTT::loop() {
-    _mqttClient->loop();
+    if (!_mqttClient) return;
 
-    // Reconnect if connection is lost
+    // If disconnected, reconnect
     if (!_mqttClient->connected()) {
-        Serial.println("[MQTT] Connection lost. Attempting to reconnect...");
-        delay(1000);
-        connectToBroker();
+        Serial.println("[MQTT] Disconnected. Reconnecting...");
+
+        // IMPORTANT: connectToBroker() should use the same port as before
+        // If your connectToBroker needs a port, keep it fixed here:
+        if (connectToBroker(1883)) {
+            Serial.println("[MQTT] Reconnected. Re-subscribing...");
+            // Re-subscribe after reconnect (PubSubClient drops subs on reconnect)
+            subscribeTopic("command");
+        } else {
+            delay(1000);
+            return;
+        }
     }
+
+    _mqttClient->loop();
 }
