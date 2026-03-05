@@ -1,0 +1,225 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>TA7 Dashboard</title>
+
+<style>
+body { font-family:'Segoe UI',Arial,sans-serif;margin:20px;background:#f0f2f5; }
+h1 { color:#1a73e8; }
+
+main { display:flex;gap:24px;flex-wrap:wrap; }
+
+article {
+  border:none;
+  border-radius:12px;
+  padding:20px;
+  background:white;
+  box-shadow:0 4px 12px rgba(0,0,0,0.1);
+}
+
+canvas {
+  border:1px solid #ccc;
+  border-radius:8px;
+  display:block;
+}
+
+button{
+  padding:10px 16px;
+  margin-right:8px;
+  border:none;
+  border-radius:6px;
+  background:#1a73e8;
+  color:white;
+  cursor:pointer;
+  transition:.2s;
+}
+button:hover{ background:#1557b0; }
+
+pre{
+  background:#2d2d2d;
+  color:#7fdbca;
+  padding:12px;
+  border-radius:8px;
+  max-width:520px;
+  overflow:auto;
+  font-size:13px;
+}
+
+.stats{
+  margin-top:15px;
+  line-height:1.6;
+  font-weight:500;
+}
+
+.stats span{ color:#1a73e8; }
+</style>
+
+</head>
+
+<body>
+
+<header>
+<h1>TA7 Heatmap Dashboard</h1>
+</header>
+
+<main>
+
+<article>
+
+<header>
+<h2>Live Thermal Heatmap</h2>
+</header>
+
+<canvas id="heatmap" width="240" height="240"></canvas>
+
+<section class="stats">
+<p>Thermistor (Ambient): <span id="thermistor">--</span> °C</p>
+<p>Prediction: <span id="prediction">--</span> (<span id="confidence">--</span>)</p>
+<p>Device MAC: <span id="mac">--</span></p>
+</section>
+
+<footer style="margin-top:15px;">
+<button onclick="sendCmd('get_one')">Get One</button>
+<button onclick="sendCmd('start_continuous')">Start Continuous</button>
+<button onclick="sendCmd('stop')">Stop</button>
+</footer>
+
+</article>
+
+
+<article>
+
+<header>
+<h2>Database Readings (Last 10)</h2>
+</header>
+
+<button onclick="refreshReadings()" style="background:#34a853;">Refresh Data</button>
+
+<section style="margin-top:10px;">
+<pre id="dbout">[]</pre>
+</section>
+
+</article>
+
+</main>
+
+
+<script>
+
+const canvas=document.getElementById("heatmap");
+const ctx=canvas.getContext("2d");
+
+const thermEl=document.getElementById("thermistor");
+const predEl=document.getElementById("prediction");
+const confEl=document.getElementById("confidence");
+const macEl=document.getElementById("mac");
+const dbout=document.getElementById("dbout");
+
+function clamp(x,a,b){ return Math.max(a,Math.min(b,x)); }
+
+function drawHeatmap(pixels,thermistorTemp){
+
+if(!pixels||pixels.length!==64)return;
+
+const cell=30;
+const baseTemp=thermistorTemp||25.0;
+const maxDelta=7.0;
+
+for(let r=0;r<8;r++){
+for(let c=0;c<8;c++){
+
+const v=pixels[r*8+c];
+
+let t=(v-baseTemp)/maxDelta;
+t=clamp(t,0,1);
+
+const hue=(1.0-t)*60;
+ctx.fillStyle=`hsl(${hue},90%,50%)`;
+
+ctx.fillRect(c*cell,r*cell,cell,cell);
+
+}
+}
+
+}
+
+async function sendCmd(cmd){
+
+try{
+const res=await fetch("/api/command",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({command:cmd})
+});
+console.log("Command sent:",cmd,"Status:",res.status);
+}catch(e){
+console.error("Failed to send command",e);
+}
+
+}
+
+async function refreshReadings(){
+
+try{
+
+const res=await fetch("/api/readings");
+const data=await res.json();
+
+dbout.textContent=JSON.stringify(data.slice(0,10),null,2);
+
+}catch(e){
+
+dbout.textContent="Error fetching data";
+
+}
+
+}
+
+function connectWS(){
+
+const proto = location.protocol === "https:" ? "wss" : "ws";
+const ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+ws.onopen=()=>{
+console.log("WebSocket connected");
+setInterval(()=>{ try{ws.send("ping")}catch(e){} },20000);
+};
+
+ws.onmessage=(ev)=>{
+
+try{
+
+const msg=JSON.parse(ev.data);
+
+if(msg.type==="reading"){
+
+const temp=parseFloat(msg.thermistor_temp);
+
+thermEl.textContent=temp.toFixed(2);
+predEl.textContent=msg.prediction;
+confEl.textContent=Number(msg.confidence).toFixed(3);
+macEl.textContent=msg.mac_address;
+
+drawHeatmap(msg.pixels,temp);
+
+}
+
+}catch(e){}
+
+};
+
+ws.onclose=()=>{
+console.log("WebSocket closed, retrying...");
+setTimeout(connectWS,1000);
+};
+
+}
+
+connectWS();
+refreshReadings();
+
+</script>
+
+</body>
+</html>
