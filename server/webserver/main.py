@@ -4,17 +4,25 @@ import threading
 import asyncio  
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from models import Device, Reading, User, SessionToken
+
+
+import bcrypt
+import uuid
+
+from fastapi import FastAPI, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, Response
+
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from pydantic import BaseModel, Field
 
 import db
-import models
+#import models
 from db import engine, Base, get_db, SessionLocal
-from models import Device, Reading
+#from models import Device, Reading
+from models import Device, Reading, User, SessionToken
 
 # MQTT
 import paho.mqtt.client as mqtt
@@ -57,6 +65,10 @@ ws_manager = WSManager()
 
 class CommandIn(BaseModel):
     command: str
+
+class AuthIn(BaseModel):
+    username: str
+    password: str
 
 class ReadingIn(BaseModel):
     mac_address: str
@@ -101,10 +113,60 @@ def _insert_reading(db: Session, payload: ReadingIn) -> Reading:
     db.refresh(r)
     return r
 
+#--------------------------session helper-----------------------------------------
+def get_current_user_from_request(request: Request, db: Session) -> Optional[User]:
+    token = request.cookies.get("session_token")
+    if not token:
+        return None
+
+    session_row = db.scalar(
+        select(SessionToken).where(SessionToken.session_token == token)
+    )
+    if session_row is None:
+        return None
+
+    user = db.get(User, session_row.user_id)
+    return user
+
+
+def require_user(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> User:
+    user = get_current_user_from_request(request, db)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user
+
 # ---------- Frontend ----------
+#@app.get("/", response_class=HTMLResponse)
+#def index(request: Request):
+#    return templates.TemplateResponse("index.html", {"request": request})
+
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+def index(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user_from_request(request, db)
+    if user is None:
+        return RedirectResponse(url="/login", status_code=302)
+
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "username": user.username
+        }
+    )
+
+# ---------- Login----------
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+# ---------- Register ----------
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    return templates.TemplateResponse("register.html", {"request": request})
+
 
 @app.websocket("/ws")
 async def ws(ws: WebSocket):
@@ -138,7 +200,12 @@ def _get_pub_client() -> mqtt.Client:
 print("[DEBUG] COMMAND_TOPIC =", repr(COMMAND_TOPIC))
 
 @app.post("/api/command")
-def api_command(body: CommandIn):
+def api_command(
+    body: CommandIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
     cmd = body.command.strip().lower()
     if cmd not in ["get_one", "start_continuous", "stop"]:
         raise HTTPException(status_code=400, detail="Unknown command")
@@ -172,7 +239,12 @@ async def create_reading(payload: ReadingIn, db: Session = Depends(get_db)):
     return {"id": r.id}
 
 @app.get("/api/readings")
-def list_readings(device_mac: Optional[str] = None, db: Session = Depends(get_db)):
+def list_readings(
+    request: Request,
+    device_mac: Optional[str] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
     stmt = select(Reading).order_by(Reading.id.desc())
     if device_mac:
         stmt = stmt.where(Reading.mac_address == device_mac)
@@ -190,7 +262,12 @@ def list_readings(device_mac: Optional[str] = None, db: Session = Depends(get_db
     ]
 
 @app.delete("/api/readings/{reading_id}")
-def delete_reading(reading_id: int, db: Session = Depends(get_db)):
+def delete_reading(
+    reading_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
     r = db.get(Reading, reading_id)
     if r is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -198,8 +275,81 @@ def delete_reading(reading_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"ok": True}
 
+@app.post("/api/register")
+def api_register(body: AuthIn, db: Session = Depends(get_db)):
+
+    username = body.username.strip()
+    password = body.password
+
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Missing username or password")
+
+    existing = db.scalar(select(User).where(User.username == username))
+    if existing:
+        raise HTTPException(status_code=409, detail="Username already exists")
+
+    password_hash = bcrypt.hashpw(
+        password.encode("utf-8"),
+        bcrypt.gensalt()
+    ).decode("utf-8")
+
+    user = User(
+        username=username,
+        password_hash=password_hash
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "ok": True,
+        "id": user.id
+    }
+
+@app.post("/api/login")
+def api_login(body: AuthIn, response: Response, db: Session = Depends(get_db)):
+
+    username = body.username.strip()
+    password = body.password
+
+    user = db.scalar(select(User).where(User.username == username))
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if not bcrypt.checkpw(
+        password.encode("utf-8"),
+        user.password_hash.encode("utf-8")
+    ):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = str(uuid.uuid4())
+
+    session_row = SessionToken(
+        user_id=user.id,
+        session_token=token
+    )
+
+    db.add(session_row)
+    db.commit()
+
+    response.set_cookie(
+        key="session_token",
+        value=token,
+        httponly=True,
+        samesite="lax"
+    )
+
+    return {"ok": True}
+
+
 @app.get("/api/devices")
-def list_devices(db: Session = Depends(get_db)):
+#def list_devices(db: Session = Depends(get_db)):
+def list_devices(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
     devices = db.scalars(select(Device).order_by(Device.id.desc())).all()
     return [{"id": d.id, "mac_address": d.mac_address} for d in devices]
 
@@ -247,8 +397,28 @@ def _mqtt_thread():
     c.connect(MQTT_BROKER, 1883, 60)
     c.loop_forever()
 
+@app.post("/api/logout")
+def api_logout(request: Request, response: Response, db: Session = Depends(get_db)):
+
+    token = request.cookies.get("session_token")
+
+    if token:
+        session_row = db.scalar(
+            select(SessionToken).where(SessionToken.session_token == token)
+        )
+
+        if session_row:
+            db.delete(session_row)
+            db.commit()
+
+    response.delete_cookie("session_token")
+
+    return {"ok": True}
+
 @app.on_event("startup")
 async def startup_event():
     app.state.main_loop = asyncio.get_running_loop()
     t = threading.Thread(target=_mqtt_thread, daemon=True)
     t.start()
+
+
