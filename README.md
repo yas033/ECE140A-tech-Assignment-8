@@ -1,3 +1,28 @@
+# ECE140A Tech Assignment 8
+
+Author: Yanhua Shi  
+Course: ECE140A – Internet of Things  
+Assignment: Tech Assignment 8 – Authentication & Authorization
+
+---
+
+# Overview
+
+This project extends the IoT dashboard built in Tech Assignment 7 by adding an authentication and authorization system.
+
+Users must register and log in before accessing the dashboard, viewing sensor data, or sending commands to ESP32 devices.
+
+The application uses FastAPI, MySQL, Docker, MQTT, and WebSockets to provide a secure IoT monitoring dashboard.
+
+----CHECK-WITH-Tech assignment 8 Google Doc instructions------
+[https://docs.google.com/document/d/1lm_NzlzbVfV3iFRjwsRPJiUJhvwrTh7C1xWzsRJAc_g/edit?pli=1&tab=t.0]
+
+
+---
+
+# Tech Assignment 7
+[GitHub classroom link: https://classroom.github.com/a/VJSh03O0]
+
 # **SUBMISSION LINK MUST BE EXACTLY ONE LINE BELOW THIS** (FAILURE TO DO SO WILL RESULT IN A 0 GRADE)
 
 [youtubelink: https://youtu.be/hu3LQh48Kg4?si=C6BuzpJNaqZIPWt-]
@@ -9,8 +34,7 @@
     - Run docker ps in a terminal or show docker desktop.
  - All of the above must be included to receive credit.
 
-# Tech Assignment 7
-[GitHub classroom link: https://classroom.github.com/a/VJSh03O0]
+
 
 ## Requirements
 
@@ -183,21 +207,3 @@ NO VIDEO REQUIRED FOR THIS ASSIGNMENT
 
 
 
-# ECE140A Tech Assignment 8
-
-Author: Yanhua Shi  
-Course: ECE140A – Internet of Things  
-Assignment: Tech Assignment 8 – Authentication & Authorization
-
----
-
-# Overview
-
-This project extends the IoT dashboard built in Tech Assignment 7 by adding an authentication and authorization system.
-
-Users must register and log in before accessing the dashboard, viewing sensor data, or sending commands to ESP32 devices.
-
-The application uses FastAPI, MySQL, Docker, MQTT, and WebSockets to provide a secure IoT monitoring dashboard.
-
-----CHECK-WITH-Tech assignment 8 Google Doc instructions------
-[https://docs.google.com/document/d/1lm_NzlzbVfV3iFRjwsRPJiUJhvwrTh7C1xWzsRJAc_g/edit?pli=1&tab=t.0]
