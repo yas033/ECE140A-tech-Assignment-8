@@ -10,6 +10,7 @@
  - All of the above must be included to receive credit.
 
 # Tech Assignment 7
+[GitHub classroom link: https://classroom.github.com/a/VJSh03O0]
 
 ## Requirements
 
@@ -171,3 +172,32 @@ Autograder checks these exact response keys:
 | `pixels` | list of 64 floats | raw 8x8 thermal values as JSON array |
 
 > **Tip:** Read thermistor on ESP32 via `amg.readThermistor()`. Send it in MQTT payload as `"thermistor"` so the server can store/return it as `thermistor_temp`.
+
+
+Tech Assignment 8
+Overview
+This assignment extends Tech Assignment 7 by adding an authentication and authorization system to your IoT dashboard. Users must register and log in before they can access the dashboard, view sensor data, or interact with ESP32 devices.
+You are building on top of your TA7 codebase. You will keep using the same repository
+
+NO VIDEO REQUIRED FOR THIS ASSIGNMENT
+
+
+
+# ECE140A Tech Assignment 8
+
+Author: Yanhua Shi  
+Course: ECE140A – Internet of Things  
+Assignment: Tech Assignment 8 – Authentication & Authorization
+
+---
+
+# Overview
+
+This project extends the IoT dashboard built in Tech Assignment 7 by adding an authentication and authorization system.
+
+Users must register and log in before accessing the dashboard, viewing sensor data, or sending commands to ESP32 devices.
+
+The application uses FastAPI, MySQL, Docker, MQTT, and WebSockets to provide a secure IoT monitoring dashboard.
+
+----CHECK-WITH-Tech assignment 8 Google Doc instructions------
+[https://docs.google.com/document/d/1lm_NzlzbVfV3iFRjwsRPJiUJhvwrTh7C1xWzsRJAc_g/edit?pli=1&tab=t.0]
